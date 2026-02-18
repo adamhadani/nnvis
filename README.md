@@ -13,13 +13,16 @@ Inspired by [Neural Networks, Manifolds, and Topology](https://colah.github.io/p
 
 ## Features
 
-- **Layer-by-layer space deformation** — see how each `Wx + b` and activation transforms the 2D grid, with gouraud-shaded pcolormesh showing the deformed space colored by class probability
-- **Decision boundary heatmap** — dense forward pass over input space showing the learned decision boundary with contour lines
-- **Live training animation** — watch the network learn in real time as the decision boundary and space folding evolve during SGD training
-- **Configurable architecture** — adjust depth (1-8 hidden layers), width (2-32 neurons), activation function (ReLU, Tanh, Sigmoid, Leaky ReLU, ELU), weight/bias scales, and learning rate
-- **3D visualization** — for 3-wide hidden layers, interactive Plotly 3D plots let you drag to rotate, zoom, and pan the transformed space
-- **PCA projection** — for layers wider than 3, intermediate representations are projected to 2D via PCA
-- **Dataset overlays** — Two Spirals, Concentric Circles, and XOR toy datasets
+| | Feature | Details |
+|---|---|---|
+| 🧩 | **Layer-by-layer space deformation** | See how each `Wx + b` and activation transforms the 2D grid, with gouraud-shaded pcolormesh colored by class probability |
+| 🎯 | **Decision boundary heatmap** | Dense forward pass over input space showing the learned boundary with contour lines |
+| 🎬 | **Live training animation** | Watch the network learn in real time as decision boundaries and space folding evolve during SGD |
+| 🏗️ | **Configurable architecture** | Adjust depth (1–8 layers), width (2–32 neurons), activation (ReLU, Tanh, Sigmoid, Leaky ReLU, ELU), weight/bias scales, and learning rate |
+| 🌐 | **Interactive 3D visualization** | For 3-wide hidden layers, drag-to-rotate Plotly 3D plots let you explore the transformed space from any angle |
+| 📉 | **PCA projection** | For layers wider than 3, intermediate representations are projected to 2D via PCA |
+| 🌀 | **Toy dataset overlays** | Two Spirals, Concentric Circles, and XOR — see how the network untangles each one |
+| 🧮 | **Pure numpy** | No ML framework — forward pass, backprop, and softmax are hand-written for full transparency |
 
 ## Setup
 
