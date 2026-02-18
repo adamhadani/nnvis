@@ -7,6 +7,10 @@ Inspired by [Neural Networks, Manifolds, and Topology](https://colah.github.io/p
 ![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue)
 ![Streamlit](https://img.shields.io/badge/built%20with-Streamlit-ff4b4b)
 
+<p align="center">
+  <img src="spacefolding-example.png" alt="nnvis screenshot showing space folding visualization with training metrics and layer-by-layer transformation" width="900">
+</p>
+
 ## Features
 
 - **Layer-by-layer space deformation** — see how each `Wx + b` and activation transforms the 2D grid, with gouraud-shaded pcolormesh showing the deformed space colored by class probability
