@@ -12,6 +12,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 – registers '3d' projection
+import math
+import plotly.graph_objects as go
 
 # ── Dark-mode-friendly matplotlib styling ────────────────────
 plt.rcParams.update({
@@ -56,6 +58,15 @@ hidden_width = st.sidebar.slider(
 activation_name = st.sidebar.selectbox(
     "Activation function", ["ReLU", "Tanh", "Sigmoid", "Leaky ReLU", "ELU"]
 )
+_ACT_FORMULAS = {
+    "ReLU": r"$f(x) = \max(0,\, x)$",
+    "Tanh": r"$f(x) = \tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$",
+    "Sigmoid": r"$f(x) = \sigma(x) = \frac{1}{1 + e^{-x}}$",
+    "Leaky ReLU": r"$f(x) = \begin{cases} x & x > 0 \\ 0.01\,x & x \le 0 \end{cases}$",
+    "ELU": r"$f(x) = \begin{cases} x & x > 0 \\ e^x - 1 & x \le 0 \end{cases}$",
+}
+st.sidebar.caption(_ACT_FORMULAS[activation_name])
+_act_plot_slot = st.sidebar.empty()
 weight_scale = st.sidebar.slider("Weight scale", 0.1, 3.0, 1.2, 0.1)
 bias_scale = st.sidebar.slider("Bias scale", 0.0, 2.0, 0.3, 0.05)
 
@@ -68,8 +79,9 @@ view_adapt = st.sidebar.slider(
     "0 = fixed global view, 1 = fully auto-scaled, 0.5 = gradual transition.",
 )
 if hidden_width == 3:
-    view_elev = st.sidebar.slider("3D elevation", 0, 90, 30, 5)
-    view_azim = st.sidebar.slider("3D azimuth", 0, 360, 45, 5)
+    view_elev = st.sidebar.slider("3D initial elevation", 0, 90, 30, 5,
+                                  help="Initial camera angle. Drag the 3D plot to rotate freely.")
+    view_azim = st.sidebar.slider("3D initial azimuth", 0, 360, 45, 5)
 else:
     view_elev, view_azim = 30, 45
 seed = st.sidebar.number_input("Random seed", 0, 99999, 42, step=1)
@@ -125,6 +137,25 @@ ACTIVATIONS = {
     "Leaky ReLU": leaky_relu,
     "ELU": elu,
 }
+
+# Miniature activation function plot (renders into reserved sidebar slot)
+_act_x = np.linspace(-4, 4, 300)
+_act_y = ACTIVATIONS[activation_name](_act_x)
+_act_fig, _act_ax = plt.subplots(figsize=(3, 0.9))
+_act_ax.plot(_act_x, _act_y, color="#58a6ff", linewidth=1.8)
+_act_ax.axhline(0, color="#30363d", linewidth=0.5)
+_act_ax.axvline(0, color="#30363d", linewidth=0.5)
+_act_ax.set_xlim(-4, 4)
+_ypad = max(abs(_act_y.min()), abs(_act_y.max()), 1) * 0.15
+_act_ax.set_ylim(_act_y.min() - _ypad, _act_y.max() + _ypad)
+for spine in _act_ax.spines.values():
+    spine.set_visible(False)
+_act_ax.tick_params(axis="both", length=0, labelsize=5, pad=2)
+_act_ax.set_xticks([-4, -2, 0, 2, 4])
+_act_ax.set_yticks([])
+_act_fig.tight_layout(pad=0.2)
+_act_plot_slot.pyplot(_act_fig)
+plt.close(_act_fig)
 
 ACTIVATION_DERIVS = {
     "ReLU": lambda z: (z > 0).astype(float),
@@ -192,12 +223,24 @@ b_out = rng.normal(0, bias_scale, (2,))
 _total_params = sum(
     W.shape[0] * W.shape[1] + b.shape[0] for W, b in layers
 ) + W_out.shape[0] * W_out.shape[1] + b_out.shape[0]
-_arch_str = " \u2192 ".join(
-    ["2"] + [str(hidden_width)] * num_hidden + ["2 (softmax)"]
-)
-st.caption(
-    f"Architecture: {_arch_str}  |  "
-    f"{_total_params} trainable parameters ({activation_name})"
+_layer_dims = [2] + [hidden_width] * num_hidden + [2]
+_arch_flow = " &rarr; ".join(
+    f"<code style='padding:2px 8px;background:#21262d;border-radius:4px;"
+    f"color:#58a6ff;font-size:1.05em'>{d}</code>"
+    for d in _layer_dims
+) + " <span style='color:#8b949e'>(softmax)</span>"
+_param_parts = []
+for i, (W, b) in enumerate(layers):
+    _param_parts.append(f"Layer {i+1}: {W.size}w + {b.size}b")
+_param_parts.append(f"Output: {W_out.size}w + {b_out.size}b")
+_param_detail = " &middot; ".join(_param_parts)
+st.markdown(
+    f"<div style='margin-bottom:0.5em'>"
+    f"<span style='color:#c9d1d9;font-weight:600'>Network: </span>"
+    f"{_arch_flow}</div>"
+    f"<div style='color:#8b949e;font-size:0.85em'>"
+    f"{_total_params:,} trainable parameters &mdash; {_param_detail}</div>",
+    unsafe_allow_html=True,
 )
 
 
@@ -251,10 +294,12 @@ def project_pca(points, n_components=2):
 
 
 # ── Rendering function ──────────────────────────────────────
-def render_frame(ws, bs, w_o, b_o, step_info=None):
-    """Render both visualizations with the given weights.
+def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
+    """Render all visualizations to the current Streamlit context.
 
-    Returns (grid_fig, boundary_fig).
+    Outputs directly via st.* calls so it works inside st.empty()
+    containers for animation.  When *animating* is True, 3D stages
+    use static matplotlib instead of interactive Plotly for performance.
     """
     # Forward pass on visualization grid (with intermediate states)
     states = [grid_flat.copy()]
@@ -278,9 +323,8 @@ def render_frame(ws, bs, w_o, b_o, step_info=None):
         ds_st = ds_s
 
     # ── Classify each stage's dimensionality ───────────────
-    # dim=2: native 2D (pcolormesh), dim=3: native 3D, dim>3: PCA→2D
     stage_dim = []     # "2d", "3d", or "pca"
-    states_vis = []    # projected coords for plotting
+    states_vis = []    # coords for plotting (projected if needed)
     pca_info = []      # (mean, basis) or None per stage
     for pts in states:
         d = pts.shape[1]
@@ -298,15 +342,13 @@ def render_frame(ws, bs, w_o, b_o, step_info=None):
             states_vis.append(proj)
             pca_info.append((mean, basis))
 
-    # ── Layer-by-layer figure ────────────────────────────────
+    # ── Compute axis limits ──────────────────────────────────
     n_stages = len(states)
     max_cols = min(5, n_stages)
-    n_rows = (n_stages + max_cols - 1) // max_cols
+    has_3d = "3d" in stage_dim
 
-    # Compute axis limits (on the 2D projection for pca/2d stages,
-    # and on all 3 axes for 3D stages)
     PAD = 0.05
-    stage_lims = []  # (xmin, xmax, ymin, ymax[, zmin, zmax])
+    stage_lims = []
     for idx, pts in enumerate(states_vis):
         xmin, xmax = pts[:, 0].min(), pts[:, 0].max()
         ymin, ymax = pts[:, 1].min(), pts[:, 1].max()
@@ -325,139 +367,169 @@ def render_frame(ws, bs, w_o, b_o, step_info=None):
             stage_lims.append(tuple(tight))
         else:
             prev = stage_lims[-1]
-            # Blend x/y limits (first 4 values)
             bl = [prev[i] + view_adapt * (tight[i] - prev[i]) for i in range(4)]
             bl[0] = min(bl[0], tight[0])
             bl[1] = max(bl[1], tight[1])
             bl[2] = min(bl[2], tight[2])
             bl[3] = max(bl[3], tight[3])
-            # For z limits on 3D stages, just use tight bounds
             if stage_dim[idx] == "3d":
                 bl.extend(tight[4:6])
             stage_lims.append(tuple(bl))
 
-    fig1, axes = plt.subplots(
-        n_rows, max_cols,
-        figsize=(4.2 * max_cols, 4.2 * n_rows),
-        squeeze=False,
-    )
-
     prob_2d = pc0.reshape(grid_n, grid_n)
-    for idx in range(n_stages):
-        row, col = divmod(idx, max_cols)
-        ax = axes[row][col]
-        pts = states_vis[idx]
-        sdim = stage_dim[idx]
 
-        if sdim == "3d":
-            # Replace 2D axis with a 3D one at the same grid position
-            ax.remove()
-            ax = fig1.add_subplot(
-                n_rows, max_cols, row * max_cols + col + 1,
-                projection="3d",
-            )
-            ax.set_facecolor("none")
-            pts_3d = pts.reshape(grid_n, grid_n, 3)
-            ax.scatter(
-                pts[:, 0], pts[:, 1], pts[:, 2],
-                c=pc0, cmap=cmap, s=3, alpha=0.5, vmin=0, vmax=1,
-                depthshade=True,
-            )
-            if show_gridlines:
-                for i in range(grid_n):
-                    ax.plot(pts_3d[i, :, 0], pts_3d[i, :, 1], pts_3d[i, :, 2],
-                            color="w", alpha=0.12, lw=0.3)
-                for j in range(grid_n):
-                    ax.plot(pts_3d[:, j, 0], pts_3d[:, j, 1], pts_3d[:, j, 2],
-                            color="w", alpha=0.12, lw=0.3)
-            if ds_st is not None:
-                dp = ds_st[idx]
-                ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
-                           dp[ds_labels == 0, 2],
-                           c="tab:red", s=8, alpha=0.7, zorder=5)
-                ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
-                           dp[ds_labels == 1, 2],
-                           c="tab:blue", s=8, alpha=0.7, zorder=5)
+    # ── Layer-by-layer rendering ─────────────────────────────
+    use_plotly_3d = has_3d and not animating
+
+    if use_plotly_3d:
+        # Interactive Plotly for 3D stages (static view only)
+        st.subheader("Layer-by-Layer Space Transformation")
+        st.caption("Color: P(class 0) — blue (0) \u2192 white (0.5) \u2192 red (1)")
+
+        for row_start in range(0, n_stages, max_cols):
+            row_end = min(row_start + max_cols, n_stages)
+            cols = st.columns(max_cols)
+            for col_idx, stage_idx in enumerate(range(row_start, row_end)):
+                with cols[col_idx]:
+                    pts = states_vis[stage_idx]
+                    sdim = stage_dim[stage_idx]
+                    lim = stage_lims[stage_idx]
+
+                    if sdim == "3d":
+                        _render_stage_3d(
+                            pts, pc0, grid_n, lim, stage_idx,
+                            ds_st[stage_idx] if ds_st else None,
+                        )
+                    else:
+                        _render_stage_2d(
+                            pts, pc0, prob_2d, grid_n, lim, sdim,
+                            stage_idx, states, pca_info,
+                            ds_st[stage_idx] if ds_st else None,
+                        )
+    else:
+        # Single matplotlib figure (2D, PCA, and mpl-3D subplots)
+        n_rows = (n_stages + max_cols - 1) // max_cols
+        fig1, axes = plt.subplots(
+            n_rows, max_cols,
+            figsize=(4.2 * max_cols, 4.2 * n_rows),
+            squeeze=False,
+        )
+
+        for idx in range(n_stages):
+            row, col = divmod(idx, max_cols)
+            ax = axes[row][col]
+            pts = states_vis[idx]
+            sdim = stage_dim[idx]
             lim = stage_lims[idx]
-            ax.set_xlim(lim[0], lim[1])
-            ax.set_ylim(lim[2], lim[3])
-            ax.set_zlim(lim[4], lim[5])
-            ax.view_init(elev=view_elev, azim=view_azim)
-            ax.tick_params(labelsize=5)
-            title = stage_names[idx] + "\n(3D)"
 
-        elif sdim == "pca":
-            # PCA-projected: use scatter (grid topology lost in projection)
-            ax.scatter(
-                pts[:, 0], pts[:, 1],
-                c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
-            )
-            if ds_st is not None:
-                dp = ds_st[idx]
-                mean, basis = pca_info[idx]
-                dp = (dp - mean) @ basis
-                ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
-                           c="tab:red", s=5, alpha=0.7,
-                           edgecolors="#30363d", linewidths=0.15, zorder=5)
-                ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
-                           c="tab:blue", s=5, alpha=0.7,
-                           edgecolors="#30363d", linewidths=0.15, zorder=5)
-            lim = stage_lims[idx]
-            ax.set_xlim(lim[0], lim[1])
-            ax.set_ylim(lim[2], lim[3])
-            orig_dim = states[idx].shape[1]
-            title = stage_names[idx] + f"\n(PCA: {orig_dim}D \u2192 2D)"
-            ax.set_aspect("equal")
-
-        else:
-            # Native 2D: use pcolormesh with grid structure
-            pts_2d = pts.reshape(grid_n, grid_n, 2)
-            try:
-                ax.pcolormesh(
-                    pts_2d[:, :, 0], pts_2d[:, :, 1], prob_2d,
-                    cmap=cmap, shading="gouraud", alpha=0.85, vmin=0, vmax=1,
+            if sdim == "3d":
+                # Replace 2D axis with matplotlib 3D subplot
+                ax.remove()
+                ax = fig1.add_subplot(
+                    n_rows, max_cols, row * max_cols + col + 1,
+                    projection="3d",
                 )
-            except Exception:
+                ax.set_facecolor("none")
+                ax.scatter(
+                    pts[:, 0], pts[:, 1], pts[:, 2],
+                    c=pc0, cmap=cmap, s=3, alpha=0.5, vmin=0, vmax=1,
+                    depthshade=True,
+                )
+                if show_gridlines:
+                    pts_3d = pts.reshape(grid_n, grid_n, 3)
+                    for i in range(grid_n):
+                        ax.plot(pts_3d[i, :, 0], pts_3d[i, :, 1], pts_3d[i, :, 2],
+                                color="w", alpha=0.12, lw=0.3)
+                    for j in range(grid_n):
+                        ax.plot(pts_3d[:, j, 0], pts_3d[:, j, 1], pts_3d[:, j, 2],
+                                color="w", alpha=0.12, lw=0.3)
+                if ds_st is not None:
+                    dp = ds_st[idx]
+                    ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
+                               dp[ds_labels == 0, 2],
+                               c="tab:red", s=8, alpha=0.7, zorder=5)
+                    ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
+                               dp[ds_labels == 1, 2],
+                               c="tab:blue", s=8, alpha=0.7, zorder=5)
+                ax.set_xlim(lim[0], lim[1])
+                ax.set_ylim(lim[2], lim[3])
+                ax.set_zlim(lim[4], lim[5])
+                ax.view_init(elev=view_elev, azim=view_azim)
+                ax.tick_params(labelsize=5)
+                title = stage_names[idx] + "\n(3D)"
+
+            elif sdim == "pca":
                 ax.scatter(
                     pts[:, 0], pts[:, 1],
                     c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
                 )
-            if show_gridlines:
-                for i in range(grid_n):
-                    ax.plot(pts_2d[i, :, 0], pts_2d[i, :, 1],
-                            color="w", alpha=0.15, lw=0.4)
-                for j in range(grid_n):
-                    ax.plot(pts_2d[:, j, 0], pts_2d[:, j, 1],
-                            color="w", alpha=0.15, lw=0.4)
-            if ds_st is not None:
-                dp = ds_st[idx]
-                ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
-                           c="tab:red", s=5, alpha=0.7,
-                           edgecolors="#30363d", linewidths=0.15, zorder=5)
-                ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
-                           c="tab:blue", s=5, alpha=0.7,
-                           edgecolors="#30363d", linewidths=0.15, zorder=5)
-            lim = stage_lims[idx]
-            ax.set_xlim(lim[0], lim[1])
-            ax.set_ylim(lim[2], lim[3])
-            title = stage_names[idx]
-            ax.set_aspect("equal")
+                if ds_st is not None:
+                    dp = ds_st[idx]
+                    mean, basis = pca_info[idx]
+                    dp = (dp - mean) @ basis
+                    ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
+                               c="tab:red", s=5, alpha=0.7,
+                               edgecolors="#30363d", linewidths=0.15, zorder=5)
+                    ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
+                               c="tab:blue", s=5, alpha=0.7,
+                               edgecolors="#30363d", linewidths=0.15, zorder=5)
+                orig_dim = states[idx].shape[1]
+                title = stage_names[idx] + f"\n(PCA: {orig_dim}D \u2192 2D)"
+                ax.set_xlim(lim[0], lim[1])
+                ax.set_ylim(lim[2], lim[3])
+                ax.set_aspect("equal")
 
-        ax.set_title(title, fontsize=10, fontweight="bold")
-        ax.tick_params(labelsize=6)
+            else:
+                pts_2d = pts.reshape(grid_n, grid_n, 2)
+                try:
+                    ax.pcolormesh(
+                        pts_2d[:, :, 0], pts_2d[:, :, 1], prob_2d,
+                        cmap=cmap, shading="gouraud", alpha=0.85, vmin=0, vmax=1,
+                    )
+                except Exception:
+                    ax.scatter(
+                        pts[:, 0], pts[:, 1],
+                        c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
+                    )
+                if show_gridlines:
+                    for i in range(grid_n):
+                        ax.plot(pts_2d[i, :, 0], pts_2d[i, :, 1],
+                                color="w", alpha=0.15, lw=0.4)
+                    for j in range(grid_n):
+                        ax.plot(pts_2d[:, j, 0], pts_2d[:, j, 1],
+                                color="w", alpha=0.15, lw=0.4)
+                if ds_st is not None:
+                    dp = ds_st[idx]
+                    ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
+                               c="tab:red", s=5, alpha=0.7,
+                               edgecolors="#30363d", linewidths=0.15, zorder=5)
+                    ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
+                               c="tab:blue", s=5, alpha=0.7,
+                               edgecolors="#30363d", linewidths=0.15, zorder=5)
+                title = stage_names[idx]
+                ax.set_xlim(lim[0], lim[1])
+                ax.set_ylim(lim[2], lim[3])
+                ax.set_aspect("equal")
 
-    for idx in range(n_stages, n_rows * max_cols):
-        row, col = divmod(idx, max_cols)
-        axes[row][col].set_visible(False)
+            ax.set_title(title, fontsize=10, fontweight="bold")
+            ax.tick_params(labelsize=6)
 
-    fig1.subplots_adjust(right=0.92)
-    cbar_ax = fig1.add_axes([0.935, 0.15, 0.012, 0.7])
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=vis_norm)
-    sm.set_array([])
-    fig1.colorbar(sm, cax=cbar_ax, label="P(class 0)")
-    plt.tight_layout(rect=[0, 0, 0.92, 1])
+        for idx in range(n_stages, n_rows * max_cols):
+            row, col = divmod(idx, max_cols)
+            axes[row][col].set_visible(False)
 
-    # ── Decision boundary figure ─────────────────────────────
+        fig1.subplots_adjust(right=0.92)
+        cbar_ax = fig1.add_axes([0.935, 0.15, 0.012, 0.7])
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=vis_norm)
+        sm.set_array([])
+        fig1.colorbar(sm, cax=cbar_ax, label="P(class 0)")
+        plt.tight_layout(rect=[0, 0, 0.92, 1])
+
+        st.subheader("Layer-by-Layer Space Transformation")
+        st.pyplot(fig1)
+        plt.close(fig1)
+
+    # ── Decision boundary ────────────────────────────────────
     h = dense_flat.copy()
     for W, b in zip(ws, bs):
         h = act_fn(h @ W.T + b)
@@ -483,20 +555,166 @@ def render_frame(ws, bs, w_o, b_o, step_info=None):
                     edgecolors="#30363d", linewidths=0.3, label="Class 1")
         ax2.legend(fontsize=8, loc="upper right")
 
-    title = "Softmax Decision Boundary"
+    db_title = "Softmax Decision Boundary"
     if step_info:
-        title = (
+        db_title = (
             f"Step {step_info['step']} | "
             f"Loss: {step_info['loss']:.4f} | "
             f"Acc: {step_info['acc']:.1%}"
         )
-    ax2.set_title(title, fontsize=12, fontweight="bold")
+    ax2.set_title(db_title, fontsize=12, fontweight="bold")
     ax2.set_xlabel("x")
     ax2.set_ylabel("y")
     fig2.colorbar(im, ax=ax2, label="P(class 0)", shrink=0.8)
     plt.tight_layout()
 
-    return fig1, fig2
+    st.subheader("Decision Boundary in Input Space")
+    st.pyplot(fig2)
+    plt.close(fig2)
+
+
+def _render_stage_3d(pts, pc0, gn, lim, stage_idx, ds_dp):
+    """Render a single 3D stage as an interactive Plotly chart."""
+    traces = []
+
+    # Grid points colored by probability
+    traces.append(go.Scatter3d(
+        x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
+        mode="markers",
+        marker=dict(
+            size=2, color=pc0, colorscale="RdBu_r",
+            cmin=0, cmax=1, opacity=0.5,
+        ),
+        hoverinfo="skip", showlegend=False,
+    ))
+
+    # Grid lines (topology preserved for 3D)
+    if show_gridlines:
+        pts_3d = pts.reshape(gn, gn, 3)
+        for i in range(gn):
+            traces.append(go.Scatter3d(
+                x=pts_3d[i, :, 0], y=pts_3d[i, :, 1], z=pts_3d[i, :, 2],
+                mode="lines",
+                line=dict(color="rgba(255,255,255,0.15)", width=1),
+                hoverinfo="skip", showlegend=False,
+            ))
+        for j in range(gn):
+            traces.append(go.Scatter3d(
+                x=pts_3d[:, j, 0], y=pts_3d[:, j, 1], z=pts_3d[:, j, 2],
+                mode="lines",
+                line=dict(color="rgba(255,255,255,0.15)", width=1),
+                hoverinfo="skip", showlegend=False,
+            ))
+
+    # Dataset overlay
+    if ds_dp is not None:
+        traces.append(go.Scatter3d(
+            x=ds_dp[ds_labels == 0, 0],
+            y=ds_dp[ds_labels == 0, 1],
+            z=ds_dp[ds_labels == 0, 2],
+            mode="markers",
+            marker=dict(size=3, color="#d62728", opacity=0.7),
+            name="Class 0", showlegend=False,
+        ))
+        traces.append(go.Scatter3d(
+            x=ds_dp[ds_labels == 1, 0],
+            y=ds_dp[ds_labels == 1, 1],
+            z=ds_dp[ds_labels == 1, 2],
+            mode="markers",
+            marker=dict(size=3, color="#1f77b4", opacity=0.7),
+            name="Class 1", showlegend=False,
+        ))
+
+    # Camera from elevation/azimuth
+    r = 2.0
+    eye_x = r * math.cos(math.radians(view_elev)) * math.cos(math.radians(view_azim))
+    eye_y = r * math.cos(math.radians(view_elev)) * math.sin(math.radians(view_azim))
+    eye_z = r * math.sin(math.radians(view_elev))
+
+    title = stage_names[stage_idx].replace("\n", " ") + " (3D)"
+    axis_style = dict(
+        backgroundcolor="rgba(0,0,0,0)",
+        gridcolor="rgba(48,54,61,0.6)",
+        showbackground=False,
+        tickfont=dict(size=8, color="#8b949e"),
+        title="",
+    )
+    pfig = go.Figure(data=traces)
+    pfig.update_layout(
+        title=dict(text=title, font=dict(size=11, color="#c9d1d9")),
+        scene=dict(
+            xaxis=dict(range=[lim[0], lim[1]], **axis_style),
+            yaxis=dict(range=[lim[2], lim[3]], **axis_style),
+            zaxis=dict(range=[lim[4], lim[5]], **axis_style),
+            bgcolor="rgba(0,0,0,0)",
+            camera=dict(eye=dict(x=eye_x, y=eye_y, z=eye_z)),
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=0, t=35, b=0),
+        height=400,
+        showlegend=False,
+    )
+    st.plotly_chart(pfig, use_container_width=True)
+
+
+def _render_stage_2d(pts, pc0, prob_2d, gn, lim, sdim,
+                     stage_idx, states, pca_info, ds_dp):
+    """Render a single 2D (native or PCA) stage as a matplotlib figure."""
+    fig, ax = plt.subplots(figsize=(4, 4))
+
+    if sdim == "pca":
+        ax.scatter(
+            pts[:, 0], pts[:, 1],
+            c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
+        )
+        if ds_dp is not None:
+            mean, basis = pca_info[stage_idx]
+            dp = (ds_dp - mean) @ basis
+            ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
+                       c="tab:red", s=5, alpha=0.7,
+                       edgecolors="#30363d", linewidths=0.15, zorder=5)
+            ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
+                       c="tab:blue", s=5, alpha=0.7,
+                       edgecolors="#30363d", linewidths=0.15, zorder=5)
+        orig_dim = states[stage_idx].shape[1]
+        title = stage_names[stage_idx] + f"\n(PCA: {orig_dim}D \u2192 2D)"
+    else:
+        pts_2d = pts.reshape(gn, gn, 2)
+        try:
+            ax.pcolormesh(
+                pts_2d[:, :, 0], pts_2d[:, :, 1], prob_2d,
+                cmap=cmap, shading="gouraud", alpha=0.85, vmin=0, vmax=1,
+            )
+        except Exception:
+            ax.scatter(
+                pts[:, 0], pts[:, 1],
+                c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
+            )
+        if show_gridlines:
+            for i in range(gn):
+                ax.plot(pts_2d[i, :, 0], pts_2d[i, :, 1],
+                        color="w", alpha=0.15, lw=0.4)
+            for j in range(gn):
+                ax.plot(pts_2d[:, j, 0], pts_2d[:, j, 1],
+                        color="w", alpha=0.15, lw=0.4)
+        if ds_dp is not None:
+            ax.scatter(ds_dp[ds_labels == 0, 0], ds_dp[ds_labels == 0, 1],
+                       c="tab:red", s=5, alpha=0.7,
+                       edgecolors="#30363d", linewidths=0.15, zorder=5)
+            ax.scatter(ds_dp[ds_labels == 1, 0], ds_dp[ds_labels == 1, 1],
+                       c="tab:blue", s=5, alpha=0.7,
+                       edgecolors="#30363d", linewidths=0.15, zorder=5)
+        title = stage_names[stage_idx]
+
+    ax.set_xlim(lim[0], lim[1])
+    ax.set_ylim(lim[2], lim[3])
+    ax.set_title(title, fontsize=10, fontweight="bold")
+    ax.set_aspect("equal")
+    ax.tick_params(labelsize=6)
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
 
 
 # ── Training helper ──────────────────────────────────────────
@@ -568,17 +786,12 @@ if animate:
             loss, acc = compute_metrics(probs_t, one_hot, ds_labels)
             loss_history.append({"step": step + 1, "loss": loss})
 
-            fig1, fig2 = render_frame(
-                Ws, bs, W_o, b_o,
-                step_info={"step": step + 1, "loss": loss, "acc": acc},
-            )
             with frame_slot.container():
-                st.subheader("Layer-by-Layer Space Transformation")
-                st.pyplot(fig1)
-                st.subheader("Decision Boundary in Input Space")
-                st.pyplot(fig2)
-            plt.close(fig1)
-            plt.close(fig2)
+                render_frame(
+                    Ws, bs, W_o, b_o,
+                    step_info={"step": step + 1, "loss": loss, "acc": acc},
+                    animating=True,
+                )
 
             progress_bar.progress((step + 1) / train_steps)
 
@@ -630,13 +843,7 @@ else:
     # Render visualizations once
     ws_cur = [W for W, b in layers]
     bs_cur = [b for W, b in layers]
-    fig1, fig2 = render_frame(ws_cur, bs_cur, W_out, b_out)
-    st.subheader("Layer-by-Layer Space Transformation")
-    st.pyplot(fig1)
-    plt.close(fig1)
-    st.subheader("Decision Boundary in Input Space")
-    st.pyplot(fig2)
-    plt.close(fig2)
+    render_frame(ws_cur, bs_cur, W_out, b_out)
 
 
 with st.expander("Layer Weights & Biases"):
