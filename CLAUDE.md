@@ -6,10 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 nnvis is a single-file Streamlit app that visualizes how feed-forward neural networks "fold" 2D space through successive layers. Inspired by [Colah's Neural Networks, Manifolds, and Topology](https://colah.github.io/posts/2014-03-NN-Manifolds-Topology/).
 
-## Running
+## Setup & Running
+
+This project uses [uv](https://docs.astral.sh/uv/) for package management.
 
 ```bash
-source .venv/bin/activate
+uv venv && source .venv/bin/activate
+uv pip install -e .
 streamlit run app.py
 ```
 

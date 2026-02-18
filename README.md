@@ -19,14 +19,14 @@ Inspired by [Neural Networks, Manifolds, and Topology](https://colah.github.io/p
 
 ## Setup
 
-Requires Python 3.14+.
+Requires Python 3.14+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/adamhadani/nnvis.git
 cd nnvis
-python3 -m venv .venv
+uv venv
 source .venv/bin/activate
-pip install -e .
+uv pip install -e .
 ```
 
 ## Usage
