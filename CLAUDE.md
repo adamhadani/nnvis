@@ -8,7 +8,7 @@ nnvis is a multipage Streamlit app with interactive neural network visualization
 
 ## Setup & Running
 
-This project uses [uv](https://docs.astral.sh/uv/) for package management.
+This project uses [uv](https://docs.astral.sh/uv/) for local development.
 
 ```bash
 uv venv && source .venv/bin/activate
@@ -17,6 +17,18 @@ streamlit run app.py
 ```
 
 There are no tests or linting configured. Verify changes with `python -c "import ast; ast.parse(open('file.py').read())"`.
+
+## Deployment
+
+The app is deployed on [Streamlit Community Cloud](https://share.streamlit.io/).
+
+**Dependencies are declared in two places — keep them in sync:**
+- `pyproject.toml` — used by `uv` for local development
+- `requirements.txt` — used by Streamlit Community Cloud for deployment
+
+Community Cloud resolves dependencies in this order: `requirements.txt` > `Pipfile` > `environment.yml` > `pyproject.toml`. When it falls through to `pyproject.toml`, it uses Poetry, which fails because this isn't a packaged project. The `requirements.txt` file ensures it uses plain pip instead.
+
+**When adding or changing a dependency, update both files.**
 
 ## Architecture
 
