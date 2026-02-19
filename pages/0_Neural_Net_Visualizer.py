@@ -43,14 +43,14 @@ st.markdown(
 st.sidebar.header("Network Architecture")
 num_hidden = st.sidebar.slider("Hidden layers", 1, 8, 3)
 hidden_width = st.sidebar.slider(
-    "Hidden layer width", 2, 32, 2,
+    "Hidden layer width", 2, 32, 3,
     help="Number of neurons per hidden layer. "
     "Width 2: exact 2D visualization. "
     "Width 3: exact 3D visualization (use elevation/azimuth to rotate). "
     "Width > 3: PCA projection to 2D (approximate).",
 )
 activation_name = st.sidebar.selectbox(
-    "Activation function", ["ReLU", "Tanh", "Sigmoid", "Leaky ReLU", "ELU"]
+    "Activation function", ["ELU", "ReLU", "Tanh", "Sigmoid", "Leaky ReLU"]
 )
 _ACT_FORMULAS = {
     "ReLU": r"$f(x) = \max(0,\, x)$",
@@ -82,7 +82,7 @@ seed = st.sidebar.number_input("Random seed", 0, 99999, 42, step=1)
 
 st.sidebar.header("Dataset Overlay")
 dataset_name = st.sidebar.selectbox(
-    "Dataset", ["None", "Two Spirals", "Concentric Circles", "XOR"]
+    "Dataset", ["Two Spirals", "Concentric Circles", "XOR", "None"]
 )
 
 st.sidebar.header("Training")
