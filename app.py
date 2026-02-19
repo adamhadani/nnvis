@@ -7,7 +7,7 @@ Run with: streamlit run app.py
 
 import streamlit as st
 
-st.set_page_config(page_title="nnvis", layout="wide")
+st.set_page_config(page_title="Neural Nets Visualized", layout="wide")
 
 pg = st.navigation(
     [
