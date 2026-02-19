@@ -317,6 +317,10 @@ def _refresh_metadata(topo):
 
 
 PRESETS = {
+    "exp(-x1^2) + x2 * cos(x1)": {
+        "fn": lambda x1, x2: exp(-(x1**2)) + x2 * cos(x1),
+        "latex": r"f(x_1, x_2) = e^{-x_1^2} + x_2 \cdot \cos(x_1)",
+    },
     "x1 * x2 + sin(x1)": {
         "fn": lambda x1, x2: x1 * x2 + sin(x1),
         "latex": r"f(x_1, x_2) = x_1 \cdot x_2 + \sin(x_1)",
@@ -324,10 +328,6 @@ PRESETS = {
     "(x1 + x2)^2": {
         "fn": lambda x1, x2: (x1 + x2) ** 2,
         "latex": r"f(x_1, x_2) = (x_1 + x_2)^2",
-    },
-    "exp(-x1^2) + x2 * cos(x1)": {
-        "fn": lambda x1, x2: exp(-(x1**2)) + x2 * cos(x1),
-        "latex": r"f(x_1, x_2) = e^{-x_1^2} + x_2 \cdot \cos(x_1)",
     },
     "log(x1^2 + 1) - x2 * x1": {
         "fn": lambda x1, x2: log(x1**2 + 1) - x2 * x1,
@@ -623,7 +623,7 @@ x2_val = st.sidebar.slider("x2", -3.0, 3.0, 0.8, 0.1)
 st.sidebar.header("Display")
 show_internals = st.sidebar.checkbox(
     "Show node internals",
-    False,
+    True,
     help="Show _backward closure source, captured variables, and graph relationships for each node.",
 )
 
