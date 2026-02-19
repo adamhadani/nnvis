@@ -335,31 +335,9 @@ PRESETS = {
 # 3. Graphviz DOT rendering
 # ═══════════════════════════════════════════════════════════════
 
-def _node_label(v, show_value, show_grad, grad_val=0.0):
-    """Build an HTML-like label for a graphviz node."""
-    parts = [v.name]
-    if show_value:
-        parts.append(f"val = {v.data:.4f}")
-    if show_grad:
-        parts.append(f"grad = {grad_val:.4f}")
-    return "\\n".join(parts)
-
-
-def _build_dot(topo, forward_done, backward_done, active_node_id=None, grad_snapshot=None):
-    """
-    Build a Graphviz DOT string.
-
-    Parameters
-    ----------
-    topo : list[Value]
-        Nodes in topological order (leaves first).
-    forward_done : set[int]
-        IDs of nodes whose forward value has been revealed.
-    backward_done : set[int]
-        IDs of nodes whose backward grad has been revealed.
-    active_node_id : int | None
-        ID of the currently active node (highlighted blue).
-    """
+def _build_dot(topo, forward_done, backward_done, active_node_id=None,
+               grad_snapshot=None):
+    """Build a Graphviz DOT string."""
     lines = [
         "digraph G {",
         "  rankdir=LR;",
@@ -389,7 +367,12 @@ def _build_dot(topo, forward_done, backward_done, active_node_id=None, grad_snap
             font = CLR_SECONDARY
 
         grad_val = grad_snapshot.get(vid, 0.0) if grad_snapshot else 0.0
-        label = _node_label(v, show_val, show_grad, grad_val)
+        parts = [v.name]
+        if show_val:
+            parts.append(f"val = {v.data:.4f}")
+        if show_grad:
+            parts.append(f"grad = {grad_val:.4f}")
+        label = "\\n".join(parts)
         op_suffix = f" [{v._op}]" if v._op else ""
         lines.append(
             f'  n{vid} [label="{label}{op_suffix}", '
@@ -667,78 +650,98 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Graph visualization ────────────────────────────────────
-dot = _build_dot(topo, step["forward_done"], step["backward_done"], step["active_id"], step["grad_snapshot"])
-st.graphviz_chart(dot, use_container_width=True)
+# ── Graph + detail layout ──────────────────────────────────
+node_by_id = {id(v): v for v in topo}
+active = node_by_id.get(step["active_id"])
 
-# ── Detail panel ────────────────────────────────────────────
-st.markdown("### Current Step")
-st.markdown(step["description"])
+dot = _build_dot(
+    topo, step["forward_done"], step["backward_done"],
+    step["active_id"], step["grad_snapshot"],
+)
 
-if step["latex"]:
-    st.latex(step["latex"])
-    st.markdown(
-        f"<div style='color:{CLR_SECONDARY}; font-family:monospace; "
-        f"padding:4px 8px; background:{CLR_BG}; border-radius:6px; "
-        f"display:inline-block'>{step['numeric']}</div>",
-        unsafe_allow_html=True,
-    )
+if show_internals:
+    parents = _compute_parents(topo)
+    col_graph, col_detail = st.columns([3, 2])
+
+    with col_graph:
+        st.graphviz_chart(dot, use_container_width=True)
+
+    with col_detail:
+        # ── Active node detail card ────────────────────────
+        st.markdown(
+            f"<div style='border:1px solid {CLR_BORDER}; border-radius:8px; "
+            f"padding:12px 16px; background:{CLR_BG}'>"
+            f"<span style='color:{CLR_ACCENT}; font-weight:700; font-size:1.1em'>"
+            f"{active.name}</span>"
+            f"<span style='color:{CLR_SECONDARY}; margin-left:8px'>"
+            f"[{active._op or 'input'}]</span></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("")
+
+        # Step description
+        st.markdown(step["description"])
+        if step["latex"]:
+            st.latex(step["latex"])
+            st.markdown(
+                f"<div style='color:{CLR_SECONDARY}; font-family:monospace; "
+                f"padding:4px 8px; background:{CLR_NODE_DEFAULT}; border-radius:6px; "
+                f"display:inline-block; font-size:0.85em'>{step['numeric']}</div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("")
+
+        # Backward closure
+        st.markdown(
+            f"<div style='color:{CLR_SECONDARY}; font-size:0.8em; "
+            f"text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px'>"
+            f"_backward closure</div>",
+            unsafe_allow_html=True,
+        )
+        st.code(active._backward_src, language="python")
+
+        # Captured variables
+        if active._captured:
+            st.markdown(
+                f"<div style='color:{CLR_SECONDARY}; font-size:0.8em; "
+                f"text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px'>"
+                f"captured variables</div>",
+                unsafe_allow_html=True,
+            )
+            cap_lines = "\n".join(
+                f"{k} = {val}" for k, val in active._captured.items()
+            )
+            st.code(cap_lines, language="python")
+
+        # Graph edges
+        child_names = [c.name for c in active._children] or ["(leaf)"]
+        parent_names = [p.name for p in parents.get(id(active), [])] or ["(root)"]
+        st.markdown(
+            f"<div style='color:{CLR_SECONDARY}; font-size:0.85em; "
+            f"font-family:monospace; margin-top:8px'>"
+            f"children: <span style='color:{CLR_TEXT}'>{', '.join(child_names)}</span>"
+            f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+            f"parents: <span style='color:{CLR_TEXT}'>{', '.join(parent_names)}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+else:
+    st.graphviz_chart(dot, use_container_width=True)
+
+    # ── Detail panel (compact, below graph) ────────────────
+    st.markdown("#### " + step["description"])
+    if step["latex"]:
+        st.latex(step["latex"])
+        st.markdown(
+            f"<div style='color:{CLR_SECONDARY}; font-family:monospace; "
+            f"padding:4px 8px; background:{CLR_BG}; border-radius:6px; "
+            f"display:inline-block'>{step['numeric']}</div>",
+            unsafe_allow_html=True,
+        )
 
 # ── Summary table ───────────────────────────────────────────
 st.markdown("### All Nodes")
 rows = _summary_table(topo, step["forward_done"], step["backward_done"], step["grad_snapshot"])
 st.table(rows)
-
-# ── Node internals panel ──────────────────────────────────
-if show_internals:
-    parents = _compute_parents(topo)
-    node_by_id = {id(v): v for v in topo}
-
-    # Find the active node for this step
-    active = node_by_id.get(step["active_id"])
-
-    st.markdown("### Node Internals")
-    st.caption("Showing tape metadata stored on each Value object in the computation graph.")
-
-    for v in topo:
-        vid = id(v)
-        is_active = vid == step["active_id"]
-        border = CLR_ACCENT if is_active else CLR_BORDER
-
-        with st.expander(
-            f"{'>> ' if is_active else ''}{v.name}"
-            f" {'[ACTIVE]' if is_active else ''}"
-            f" — {v._op or 'input'}",
-            expanded=is_active,
-        ):
-            col_a, col_b = st.columns(2)
-
-            with col_a:
-                st.markdown("**Identity**")
-                st.code(
-                    f"name     = {v.name!r}\n"
-                    f"_op      = {v._op!r}\n"
-                    f"data     = {v.data:.6f}\n"
-                    f"grad     = {step['grad_snapshot'].get(vid, 0.0):.6f}",
-                    language="python",
-                )
-
-                st.markdown("**Graph edges**")
-                child_names = [c.name for c in v._children] or ["(none — leaf)"]
-                parent_names = [p.name for p in parents.get(vid, [])] or ["(none — root)"]
-                st.code(
-                    f"_children = {child_names}\n"
-                    f" parents  = {parent_names}",
-                    language="python",
-                )
-
-            with col_b:
-                st.markdown("**`_backward` closure**")
-                st.code(v._backward_src, language="python")
-
-                if v._captured:
-                    st.markdown("**Captured variables**")
-                    cap_lines = "\n".join(
-                        f"{k:20s} = {val}" for k, val in v._captured.items()
-                    )
-                    st.code(cap_lines, language="python")

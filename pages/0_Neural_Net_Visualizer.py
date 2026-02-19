@@ -28,7 +28,7 @@ plt.rcParams.update({
     "axes.edgecolor": "#30363d",
 })
 
-st.title("Neural Network Space Folding")
+st.title("Neural Net Visualizer")
 st.markdown(
     "Watch how a feed-forward network transforms 2D space layer by layer. "
     "Each hidden layer applies a linear transformation (Wx + b) followed by a "
