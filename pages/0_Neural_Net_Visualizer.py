@@ -16,17 +16,19 @@ import math
 import plotly.graph_objects as go
 
 # ── Dark-mode-friendly matplotlib styling ────────────────────
-plt.rcParams.update({
-    "figure.facecolor": "none",
-    "axes.facecolor": "none",
-    "savefig.facecolor": "none",
-    "savefig.transparent": True,
-    "text.color": "#c9d1d9",
-    "axes.labelcolor": "#c9d1d9",
-    "xtick.color": "#8b949e",
-    "ytick.color": "#8b949e",
-    "axes.edgecolor": "#30363d",
-})
+plt.rcParams.update(
+    {
+        "figure.facecolor": "none",
+        "axes.facecolor": "none",
+        "savefig.facecolor": "none",
+        "savefig.transparent": True,
+        "text.color": "#c9d1d9",
+        "axes.labelcolor": "#c9d1d9",
+        "xtick.color": "#8b949e",
+        "ytick.color": "#8b949e",
+        "axes.edgecolor": "#30363d",
+    }
+)
 
 st.title("Neural Net Visualizer")
 st.markdown(
@@ -43,7 +45,10 @@ st.markdown(
 st.sidebar.header("Network Architecture")
 num_hidden = st.sidebar.slider("Hidden layers", 1, 8, 3)
 hidden_width = st.sidebar.slider(
-    "Hidden layer width", 2, 32, 3,
+    "Hidden layer width",
+    2,
+    32,
+    3,
     help="Number of neurons per hidden layer. "
     "Width 2: exact 2D visualization. "
     "Width 3: exact 3D visualization (use elevation/azimuth to rotate). "
@@ -68,13 +73,23 @@ st.sidebar.header("Visualization")
 grid_n = st.sidebar.slider("Grid resolution", 8, 60, 25)
 show_gridlines = st.sidebar.checkbox("Show grid lines", True)
 view_adapt = st.sidebar.slider(
-    "View adaptation", 0.0, 1.0, 0.5, 0.05,
+    "View adaptation",
+    0.0,
+    1.0,
+    0.5,
+    0.05,
     help="How quickly axis limits adapt to each layer's range. "
     "0 = fixed global view, 1 = fully auto-scaled, 0.5 = gradual transition.",
 )
 if hidden_width == 3:
-    view_elev = st.sidebar.slider("3D initial elevation", 0, 90, 30, 5,
-                                  help="Initial camera angle. Drag the 3D plot to rotate freely.")
+    view_elev = st.sidebar.slider(
+        "3D initial elevation",
+        0,
+        90,
+        30,
+        5,
+        help="Initial camera angle. Drag the 3D plot to rotate freely.",
+    )
     view_azim = st.sidebar.slider("3D initial azimuth", 0, 360, 45, 5)
 else:
     view_elev, view_azim = 30, 45
@@ -214,18 +229,23 @@ W_out = rng.normal(0, weight_scale, (2, hidden_width))
 b_out = rng.normal(0, bias_scale, (2,))
 
 # Display network metadata near top of page
-_total_params = sum(
-    W.shape[0] * W.shape[1] + b.shape[0] for W, b in layers
-) + W_out.shape[0] * W_out.shape[1] + b_out.shape[0]
+_total_params = (
+    sum(W.shape[0] * W.shape[1] + b.shape[0] for W, b in layers)
+    + W_out.shape[0] * W_out.shape[1]
+    + b_out.shape[0]
+)
 _layer_dims = [2] + [hidden_width] * num_hidden + [2]
-_arch_flow = " &rarr; ".join(
-    f"<code style='padding:2px 8px;background:#21262d;border-radius:4px;"
-    f"color:#58a6ff;font-size:1.05em'>{d}</code>"
-    for d in _layer_dims
-) + " <span style='color:#8b949e'>(softmax)</span>"
+_arch_flow = (
+    " &rarr; ".join(
+        f"<code style='padding:2px 8px;background:#21262d;border-radius:4px;"
+        f"color:#58a6ff;font-size:1.05em'>{d}</code>"
+        for d in _layer_dims
+    )
+    + " <span style='color:#8b949e'>(softmax)</span>"
+)
 _param_parts = []
 for i, (W, b) in enumerate(layers):
-    _param_parts.append(f"Layer {i+1}: {W.size}w + {b.size}b")
+    _param_parts.append(f"Layer {i + 1}: {W.size}w + {b.size}b")
 _param_parts.append(f"Output: {W_out.size}w + {b_out.size}b")
 _param_detail = " &middot; ".join(_param_parts)
 st.markdown(
@@ -246,9 +266,7 @@ def softmax(logits):
 # ── Generate dataset ────────────────────────────────────────
 ds_points = ds_labels = None
 if dataset_name != "None":
-    ds_points, ds_labels = DATASETS[dataset_name](
-        rng=np.random.default_rng(seed + 1)
-    )
+    ds_points, ds_labels = DATASETS[dataset_name](rng=np.random.default_rng(seed + 1))
 
 
 # ── Pre-compute visualization grids ─────────────────────────
@@ -317,9 +335,9 @@ def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
         ds_st = ds_s
 
     # ── Classify each stage's dimensionality ───────────────
-    stage_dim = []     # "2d", "3d", or "pca"
-    states_vis = []    # coords for plotting (projected if needed)
-    pca_info = []      # (mean, basis) or None per stage
+    stage_dim = []  # "2d", "3d", or "pca"
+    states_vis = []  # coords for plotting (projected if needed)
+    pca_info = []  # (mean, basis) or None per stage
     for pts in states:
         d = pts.shape[1]
         if d == 2:
@@ -349,8 +367,10 @@ def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
         xspan = xmax - xmin or 1.0
         yspan = ymax - ymin or 1.0
         tight = [
-            xmin - PAD * xspan, xmax + PAD * xspan,
-            ymin - PAD * yspan, ymax + PAD * yspan,
+            xmin - PAD * xspan,
+            xmax + PAD * xspan,
+            ymin - PAD * yspan,
+            ymax + PAD * yspan,
         ]
         if stage_dim[idx] == "3d":
             zmin, zmax = pts[:, 2].min(), pts[:, 2].max()
@@ -391,20 +411,32 @@ def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
 
                     if sdim == "3d":
                         _render_stage_3d(
-                            pts, pc0, grid_n, lim, stage_idx,
+                            pts,
+                            pc0,
+                            grid_n,
+                            lim,
+                            stage_idx,
                             ds_st[stage_idx] if ds_st else None,
                         )
                     else:
                         _render_stage_2d(
-                            pts, pc0, prob_2d, grid_n, lim, sdim,
-                            stage_idx, states, pca_info,
+                            pts,
+                            pc0,
+                            prob_2d,
+                            grid_n,
+                            lim,
+                            sdim,
+                            stage_idx,
+                            states,
+                            pca_info,
                             ds_st[stage_idx] if ds_st else None,
                         )
     else:
         # Single matplotlib figure (2D, PCA, and mpl-3D subplots)
         n_rows = (n_stages + max_cols - 1) // max_cols
         fig1, axes = plt.subplots(
-            n_rows, max_cols,
+            n_rows,
+            max_cols,
             figsize=(4.2 * max_cols, 4.2 * n_rows),
             squeeze=False,
         )
@@ -420,31 +452,64 @@ def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
                 # Replace 2D axis with matplotlib 3D subplot
                 ax.remove()
                 ax = fig1.add_subplot(
-                    n_rows, max_cols, row * max_cols + col + 1,
+                    n_rows,
+                    max_cols,
+                    row * max_cols + col + 1,
                     projection="3d",
                 )
                 ax.set_facecolor("none")
                 ax.scatter(
-                    pts[:, 0], pts[:, 1], pts[:, 2],
-                    c=pc0, cmap=cmap, s=3, alpha=0.5, vmin=0, vmax=1,
+                    pts[:, 0],
+                    pts[:, 1],
+                    pts[:, 2],
+                    c=pc0,
+                    cmap=cmap,
+                    s=3,
+                    alpha=0.5,
+                    vmin=0,
+                    vmax=1,
                     depthshade=True,
                 )
                 if show_gridlines:
                     pts_3d = pts.reshape(grid_n, grid_n, 3)
                     for i in range(grid_n):
-                        ax.plot(pts_3d[i, :, 0], pts_3d[i, :, 1], pts_3d[i, :, 2],
-                                color="w", alpha=0.12, lw=0.3)
+                        ax.plot(
+                            pts_3d[i, :, 0],
+                            pts_3d[i, :, 1],
+                            pts_3d[i, :, 2],
+                            color="w",
+                            alpha=0.12,
+                            lw=0.3,
+                        )
                     for j in range(grid_n):
-                        ax.plot(pts_3d[:, j, 0], pts_3d[:, j, 1], pts_3d[:, j, 2],
-                                color="w", alpha=0.12, lw=0.3)
+                        ax.plot(
+                            pts_3d[:, j, 0],
+                            pts_3d[:, j, 1],
+                            pts_3d[:, j, 2],
+                            color="w",
+                            alpha=0.12,
+                            lw=0.3,
+                        )
                 if ds_st is not None:
                     dp = ds_st[idx]
-                    ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
-                               dp[ds_labels == 0, 2],
-                               c="tab:red", s=8, alpha=0.7, zorder=5)
-                    ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
-                               dp[ds_labels == 1, 2],
-                               c="tab:blue", s=8, alpha=0.7, zorder=5)
+                    ax.scatter(
+                        dp[ds_labels == 0, 0],
+                        dp[ds_labels == 0, 1],
+                        dp[ds_labels == 0, 2],
+                        c="tab:red",
+                        s=8,
+                        alpha=0.7,
+                        zorder=5,
+                    )
+                    ax.scatter(
+                        dp[ds_labels == 1, 0],
+                        dp[ds_labels == 1, 1],
+                        dp[ds_labels == 1, 2],
+                        c="tab:blue",
+                        s=8,
+                        alpha=0.7,
+                        zorder=5,
+                    )
                 ax.set_xlim(lim[0], lim[1])
                 ax.set_ylim(lim[2], lim[3])
                 ax.set_zlim(lim[4], lim[5])
@@ -454,19 +519,39 @@ def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
 
             elif sdim == "pca":
                 ax.scatter(
-                    pts[:, 0], pts[:, 1],
-                    c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
+                    pts[:, 0],
+                    pts[:, 1],
+                    c=pc0,
+                    cmap=cmap,
+                    s=4,
+                    alpha=0.6,
+                    vmin=0,
+                    vmax=1,
                 )
                 if ds_st is not None:
                     dp = ds_st[idx]
                     mean, basis = pca_info[idx]
                     dp = (dp - mean) @ basis
-                    ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
-                               c="tab:red", s=5, alpha=0.7,
-                               edgecolors="#30363d", linewidths=0.15, zorder=5)
-                    ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
-                               c="tab:blue", s=5, alpha=0.7,
-                               edgecolors="#30363d", linewidths=0.15, zorder=5)
+                    ax.scatter(
+                        dp[ds_labels == 0, 0],
+                        dp[ds_labels == 0, 1],
+                        c="tab:red",
+                        s=5,
+                        alpha=0.7,
+                        edgecolors="#30363d",
+                        linewidths=0.15,
+                        zorder=5,
+                    )
+                    ax.scatter(
+                        dp[ds_labels == 1, 0],
+                        dp[ds_labels == 1, 1],
+                        c="tab:blue",
+                        s=5,
+                        alpha=0.7,
+                        edgecolors="#30363d",
+                        linewidths=0.15,
+                        zorder=5,
+                    )
                 orig_dim = states[idx].shape[1]
                 title = stage_names[idx] + f"\n(PCA: {orig_dim}D \u2192 2D)"
                 ax.set_xlim(lim[0], lim[1])
@@ -477,29 +562,65 @@ def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
                 pts_2d = pts.reshape(grid_n, grid_n, 2)
                 try:
                     ax.pcolormesh(
-                        pts_2d[:, :, 0], pts_2d[:, :, 1], prob_2d,
-                        cmap=cmap, shading="gouraud", alpha=0.85, vmin=0, vmax=1,
+                        pts_2d[:, :, 0],
+                        pts_2d[:, :, 1],
+                        prob_2d,
+                        cmap=cmap,
+                        shading="gouraud",
+                        alpha=0.85,
+                        vmin=0,
+                        vmax=1,
                     )
                 except Exception:
                     ax.scatter(
-                        pts[:, 0], pts[:, 1],
-                        c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
+                        pts[:, 0],
+                        pts[:, 1],
+                        c=pc0,
+                        cmap=cmap,
+                        s=4,
+                        alpha=0.6,
+                        vmin=0,
+                        vmax=1,
                     )
                 if show_gridlines:
                     for i in range(grid_n):
-                        ax.plot(pts_2d[i, :, 0], pts_2d[i, :, 1],
-                                color="w", alpha=0.15, lw=0.4)
+                        ax.plot(
+                            pts_2d[i, :, 0],
+                            pts_2d[i, :, 1],
+                            color="w",
+                            alpha=0.15,
+                            lw=0.4,
+                        )
                     for j in range(grid_n):
-                        ax.plot(pts_2d[:, j, 0], pts_2d[:, j, 1],
-                                color="w", alpha=0.15, lw=0.4)
+                        ax.plot(
+                            pts_2d[:, j, 0],
+                            pts_2d[:, j, 1],
+                            color="w",
+                            alpha=0.15,
+                            lw=0.4,
+                        )
                 if ds_st is not None:
                     dp = ds_st[idx]
-                    ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
-                               c="tab:red", s=5, alpha=0.7,
-                               edgecolors="#30363d", linewidths=0.15, zorder=5)
-                    ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
-                               c="tab:blue", s=5, alpha=0.7,
-                               edgecolors="#30363d", linewidths=0.15, zorder=5)
+                    ax.scatter(
+                        dp[ds_labels == 0, 0],
+                        dp[ds_labels == 0, 1],
+                        c="tab:red",
+                        s=5,
+                        alpha=0.7,
+                        edgecolors="#30363d",
+                        linewidths=0.15,
+                        zorder=5,
+                    )
+                    ax.scatter(
+                        dp[ds_labels == 1, 0],
+                        dp[ds_labels == 1, 1],
+                        c="tab:blue",
+                        s=5,
+                        alpha=0.7,
+                        edgecolors="#30363d",
+                        linewidths=0.15,
+                        zorder=5,
+                    )
                 title = stage_names[idx]
                 ax.set_xlim(lim[0], lim[1])
                 ax.set_ylim(lim[2], lim[3])
@@ -531,22 +652,49 @@ def render_frame(ws, bs, w_o, b_o, step_info=None, animating=False):
 
     fig2, ax2 = plt.subplots(figsize=(7, 6))
     im = ax2.imshow(
-        d_prob, extent=[-1.8, 1.8, -1.8, 1.8], origin="lower",
-        cmap=cmap, vmin=0, vmax=1, aspect="equal", interpolation="bilinear",
+        d_prob,
+        extent=[-1.8, 1.8, -1.8, 1.8],
+        origin="lower",
+        cmap=cmap,
+        vmin=0,
+        vmax=1,
+        aspect="equal",
+        interpolation="bilinear",
     )
-    ax2.contour(dx, dy, d_prob,
-                levels=np.arange(0.1, 1.0, 0.1),
-                colors="#8b949e", linewidths=0.5, alpha=0.6)
-    ax2.contour(dx, dy, d_prob,
-                levels=[0.5], colors="#c9d1d9", linewidths=1.5, linestyles="--")
+    ax2.contour(
+        dx,
+        dy,
+        d_prob,
+        levels=np.arange(0.1, 1.0, 0.1),
+        colors="#8b949e",
+        linewidths=0.5,
+        alpha=0.6,
+    )
+    ax2.contour(
+        dx, dy, d_prob, levels=[0.5], colors="#c9d1d9", linewidths=1.5, linestyles="--"
+    )
 
     if ds_points is not None:
-        ax2.scatter(ds_points[ds_labels == 0, 0], ds_points[ds_labels == 0, 1],
-                    c="tab:red", s=14, alpha=0.8,
-                    edgecolors="#30363d", linewidths=0.3, label="Class 0")
-        ax2.scatter(ds_points[ds_labels == 1, 0], ds_points[ds_labels == 1, 1],
-                    c="tab:blue", s=14, alpha=0.8,
-                    edgecolors="#30363d", linewidths=0.3, label="Class 1")
+        ax2.scatter(
+            ds_points[ds_labels == 0, 0],
+            ds_points[ds_labels == 0, 1],
+            c="tab:red",
+            s=14,
+            alpha=0.8,
+            edgecolors="#30363d",
+            linewidths=0.3,
+            label="Class 0",
+        )
+        ax2.scatter(
+            ds_points[ds_labels == 1, 0],
+            ds_points[ds_labels == 1, 1],
+            c="tab:blue",
+            s=14,
+            alpha=0.8,
+            edgecolors="#30363d",
+            linewidths=0.3,
+            label="Class 1",
+        )
         ax2.legend(fontsize=8, loc="upper right")
 
     db_title = "Softmax Decision Boundary"
@@ -572,52 +720,77 @@ def _render_stage_3d(pts, pc0, gn, lim, stage_idx, ds_dp):
     traces = []
 
     # Grid points colored by probability
-    traces.append(go.Scatter3d(
-        x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
-        mode="markers",
-        marker=dict(
-            size=2, color=pc0, colorscale="RdBu_r",
-            cmin=0, cmax=1, opacity=0.5,
-        ),
-        hoverinfo="skip", showlegend=False,
-    ))
+    traces.append(
+        go.Scatter3d(
+            x=pts[:, 0],
+            y=pts[:, 1],
+            z=pts[:, 2],
+            mode="markers",
+            marker=dict(
+                size=2,
+                color=pc0,
+                colorscale="RdBu_r",
+                cmin=0,
+                cmax=1,
+                opacity=0.5,
+            ),
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
 
     # Grid lines (topology preserved for 3D)
     if show_gridlines:
         pts_3d = pts.reshape(gn, gn, 3)
         for i in range(gn):
-            traces.append(go.Scatter3d(
-                x=pts_3d[i, :, 0], y=pts_3d[i, :, 1], z=pts_3d[i, :, 2],
-                mode="lines",
-                line=dict(color="rgba(255,255,255,0.15)", width=1),
-                hoverinfo="skip", showlegend=False,
-            ))
+            traces.append(
+                go.Scatter3d(
+                    x=pts_3d[i, :, 0],
+                    y=pts_3d[i, :, 1],
+                    z=pts_3d[i, :, 2],
+                    mode="lines",
+                    line=dict(color="rgba(255,255,255,0.15)", width=1),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
         for j in range(gn):
-            traces.append(go.Scatter3d(
-                x=pts_3d[:, j, 0], y=pts_3d[:, j, 1], z=pts_3d[:, j, 2],
-                mode="lines",
-                line=dict(color="rgba(255,255,255,0.15)", width=1),
-                hoverinfo="skip", showlegend=False,
-            ))
+            traces.append(
+                go.Scatter3d(
+                    x=pts_3d[:, j, 0],
+                    y=pts_3d[:, j, 1],
+                    z=pts_3d[:, j, 2],
+                    mode="lines",
+                    line=dict(color="rgba(255,255,255,0.15)", width=1),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
 
     # Dataset overlay
     if ds_dp is not None:
-        traces.append(go.Scatter3d(
-            x=ds_dp[ds_labels == 0, 0],
-            y=ds_dp[ds_labels == 0, 1],
-            z=ds_dp[ds_labels == 0, 2],
-            mode="markers",
-            marker=dict(size=3, color="#d62728", opacity=0.7),
-            name="Class 0", showlegend=False,
-        ))
-        traces.append(go.Scatter3d(
-            x=ds_dp[ds_labels == 1, 0],
-            y=ds_dp[ds_labels == 1, 1],
-            z=ds_dp[ds_labels == 1, 2],
-            mode="markers",
-            marker=dict(size=3, color="#1f77b4", opacity=0.7),
-            name="Class 1", showlegend=False,
-        ))
+        traces.append(
+            go.Scatter3d(
+                x=ds_dp[ds_labels == 0, 0],
+                y=ds_dp[ds_labels == 0, 1],
+                z=ds_dp[ds_labels == 0, 2],
+                mode="markers",
+                marker=dict(size=3, color="#d62728", opacity=0.7),
+                name="Class 0",
+                showlegend=False,
+            )
+        )
+        traces.append(
+            go.Scatter3d(
+                x=ds_dp[ds_labels == 1, 0],
+                y=ds_dp[ds_labels == 1, 1],
+                z=ds_dp[ds_labels == 1, 2],
+                mode="markers",
+                marker=dict(size=3, color="#1f77b4", opacity=0.7),
+                name="Class 1",
+                showlegend=False,
+            )
+        )
 
     # Camera from elevation/azimuth
     r = 2.0
@@ -652,53 +825,98 @@ def _render_stage_3d(pts, pc0, gn, lim, stage_idx, ds_dp):
     st.plotly_chart(pfig, use_container_width=True)
 
 
-def _render_stage_2d(pts, pc0, prob_2d, gn, lim, sdim,
-                     stage_idx, states, pca_info, ds_dp):
+def _render_stage_2d(
+    pts, pc0, prob_2d, gn, lim, sdim, stage_idx, states, pca_info, ds_dp
+):
     """Render a single 2D (native or PCA) stage as a matplotlib figure."""
     fig, ax = plt.subplots(figsize=(4, 4))
 
     if sdim == "pca":
         ax.scatter(
-            pts[:, 0], pts[:, 1],
-            c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
+            pts[:, 0],
+            pts[:, 1],
+            c=pc0,
+            cmap=cmap,
+            s=4,
+            alpha=0.6,
+            vmin=0,
+            vmax=1,
         )
         if ds_dp is not None:
             mean, basis = pca_info[stage_idx]
             dp = (ds_dp - mean) @ basis
-            ax.scatter(dp[ds_labels == 0, 0], dp[ds_labels == 0, 1],
-                       c="tab:red", s=5, alpha=0.7,
-                       edgecolors="#30363d", linewidths=0.15, zorder=5)
-            ax.scatter(dp[ds_labels == 1, 0], dp[ds_labels == 1, 1],
-                       c="tab:blue", s=5, alpha=0.7,
-                       edgecolors="#30363d", linewidths=0.15, zorder=5)
+            ax.scatter(
+                dp[ds_labels == 0, 0],
+                dp[ds_labels == 0, 1],
+                c="tab:red",
+                s=5,
+                alpha=0.7,
+                edgecolors="#30363d",
+                linewidths=0.15,
+                zorder=5,
+            )
+            ax.scatter(
+                dp[ds_labels == 1, 0],
+                dp[ds_labels == 1, 1],
+                c="tab:blue",
+                s=5,
+                alpha=0.7,
+                edgecolors="#30363d",
+                linewidths=0.15,
+                zorder=5,
+            )
         orig_dim = states[stage_idx].shape[1]
         title = stage_names[stage_idx] + f"\n(PCA: {orig_dim}D \u2192 2D)"
     else:
         pts_2d = pts.reshape(gn, gn, 2)
         try:
             ax.pcolormesh(
-                pts_2d[:, :, 0], pts_2d[:, :, 1], prob_2d,
-                cmap=cmap, shading="gouraud", alpha=0.85, vmin=0, vmax=1,
+                pts_2d[:, :, 0],
+                pts_2d[:, :, 1],
+                prob_2d,
+                cmap=cmap,
+                shading="gouraud",
+                alpha=0.85,
+                vmin=0,
+                vmax=1,
             )
         except Exception:
             ax.scatter(
-                pts[:, 0], pts[:, 1],
-                c=pc0, cmap=cmap, s=4, alpha=0.6, vmin=0, vmax=1,
+                pts[:, 0],
+                pts[:, 1],
+                c=pc0,
+                cmap=cmap,
+                s=4,
+                alpha=0.6,
+                vmin=0,
+                vmax=1,
             )
         if show_gridlines:
             for i in range(gn):
-                ax.plot(pts_2d[i, :, 0], pts_2d[i, :, 1],
-                        color="w", alpha=0.15, lw=0.4)
+                ax.plot(pts_2d[i, :, 0], pts_2d[i, :, 1], color="w", alpha=0.15, lw=0.4)
             for j in range(gn):
-                ax.plot(pts_2d[:, j, 0], pts_2d[:, j, 1],
-                        color="w", alpha=0.15, lw=0.4)
+                ax.plot(pts_2d[:, j, 0], pts_2d[:, j, 1], color="w", alpha=0.15, lw=0.4)
         if ds_dp is not None:
-            ax.scatter(ds_dp[ds_labels == 0, 0], ds_dp[ds_labels == 0, 1],
-                       c="tab:red", s=5, alpha=0.7,
-                       edgecolors="#30363d", linewidths=0.15, zorder=5)
-            ax.scatter(ds_dp[ds_labels == 1, 0], ds_dp[ds_labels == 1, 1],
-                       c="tab:blue", s=5, alpha=0.7,
-                       edgecolors="#30363d", linewidths=0.15, zorder=5)
+            ax.scatter(
+                ds_dp[ds_labels == 0, 0],
+                ds_dp[ds_labels == 0, 1],
+                c="tab:red",
+                s=5,
+                alpha=0.7,
+                edgecolors="#30363d",
+                linewidths=0.15,
+                zorder=5,
+            )
+            ax.scatter(
+                ds_dp[ds_labels == 1, 0],
+                ds_dp[ds_labels == 1, 1],
+                c="tab:blue",
+                s=5,
+                alpha=0.7,
+                edgecolors="#30363d",
+                linewidths=0.15,
+                zorder=5,
+            )
         title = stage_names[stage_idx]
 
     ax.set_xlim(lim[0], lim[1])
@@ -745,9 +963,7 @@ def train_step(Ws, bs, W_o, b_o, X, one_hot):
 
 
 def compute_metrics(probs, one_hot, labels):
-    loss = -np.mean(
-        np.sum(one_hot * np.log(np.clip(probs, 1e-12, 1.0)), axis=1)
-    )
+    loss = -np.mean(np.sum(one_hot * np.log(np.clip(probs, 1e-12, 1.0)), axis=1))
     acc = np.mean(np.argmax(probs, axis=1) == labels.astype(int))
     return loss, acc
 
@@ -757,7 +973,7 @@ train_loss = None
 train_acc = None
 loss_history = []
 
-if train_steps > 0 and ds_points is not None:
+if train_steps > 0 and ds_points is not None and ds_labels is not None:
     n_samples = len(ds_labels)
     one_hot = np.zeros((n_samples, 2))
     one_hot[np.arange(n_samples), ds_labels.astype(int)] = 1.0
@@ -782,7 +998,10 @@ if animate:
 
             with frame_slot.container():
                 render_frame(
-                    Ws, bs, W_o, b_o,
+                    Ws,
+                    bs,
+                    W_o,
+                    b_o,
                     step_info={"step": step + 1, "loss": loss, "acc": acc},
                     animating=True,
                 )

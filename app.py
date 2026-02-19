@@ -9,9 +9,15 @@ import streamlit as st
 
 st.set_page_config(page_title="nnvis", layout="wide")
 
-pg = st.navigation([
-    st.Page("pages/0_Neural_Net_Visualizer.py", title="Neural Net Visualizer", default=True),
-    st.Page("pages/1_Autograd_Visualizer.py", title="Autograd Visualizer"),
-])
+pg = st.navigation(
+    [
+        st.Page(
+            "pages/0_Neural_Net_Visualizer.py",
+            title="Neural Net Visualizer",
+            default=True,
+        ),
+        st.Page("pages/1_Autograd_Visualizer.py", title="Autograd Visualizer"),
+    ]
+)
 
 pg.run()

@@ -22,6 +22,7 @@ CLR_NODE_DONE = "#3fb950"
 # 1. Tape-based Value class
 # ═══════════════════════════════════════════════════════════════
 
+
 class Value:
     """Scalar value with autograd support."""
 
@@ -50,7 +51,9 @@ class Value:
             other.grad += out.grad
 
         out._backward = _backward
-        out._backward_src = f"{self.name}.grad += out.grad\n{other.name}.grad += out.grad"
+        out._backward_src = (
+            f"{self.name}.grad += out.grad\n{other.name}.grad += out.grad"
+        )
         out._captured = {"out.grad": "upstream gradient"}
         return out
 
@@ -82,15 +85,13 @@ class Value:
 
     def __pow__(self, exponent):
         assert isinstance(exponent, (int, float))
-        out = Value(self.data ** exponent, (self,), f"**{exponent}")
+        out = Value(self.data**exponent, (self,), f"**{exponent}")
 
         def _backward():
             self.grad += exponent * (self.data ** (exponent - 1)) * out.grad
 
         out._backward = _backward
-        out._backward_src = (
-            f"{self.name}.grad += {exponent} * {self.name}.data^({exponent-1}) * out.grad"
-        )
+        out._backward_src = f"{self.name}.grad += {exponent} * {self.name}.data^({exponent - 1}) * out.grad"
         out._captured = {
             "exponent": str(exponent),
             f"{self.name}.data": f"{self.data:.4f}",
@@ -167,7 +168,7 @@ class Value:
         out._backward = _backward
         out._backward_src = f"{self.name}.grad += (1 / {self.name}.data) * out.grad"
         out._captured = {
-            f"1/{self.name}.data": f"{1.0/self.data:.4f}",
+            f"1/{self.name}.data": f"{1.0 / self.data:.4f}",
             "out.grad": "upstream gradient",
         }
         return out
@@ -197,11 +198,14 @@ class Value:
 def sin(v):
     return v.sin()
 
+
 def cos(v):
     return v.cos()
 
+
 def exp(v):
     return v.exp()
+
 
 def log(v):
     return v.log()
@@ -210,6 +214,7 @@ def log(v):
 # ═══════════════════════════════════════════════════════════════
 # 2. Preset expressions
 # ═══════════════════════════════════════════════════════════════
+
 
 def _build_topo_order(root):
     """Return nodes in topological order (leaves first)."""
@@ -274,7 +279,7 @@ def _refresh_metadata(topo):
             exp_val = float(op[2:])
             c = children[0]
             v._backward_src = (
-                f"{c.name}.grad += {exp_val} * {c.name}.data^({exp_val-1}) * out.grad"
+                f"{c.name}.grad += {exp_val} * {c.name}.data^({exp_val - 1}) * out.grad"
             )
             v._captured = {
                 "exponent": str(exp_val),
@@ -306,7 +311,7 @@ def _refresh_metadata(topo):
             c = children[0]
             v._backward_src = f"{c.name}.grad += (1 / {c.name}.data) * out.grad"
             v._captured = {
-                f"1/{c.name}.data": f"{1.0/c.data:.4f}",
+                f"1/{c.name}.data": f"{1.0 / c.data:.4f}",
                 "out.grad": "upstream gradient",
             }
 
@@ -321,11 +326,11 @@ PRESETS = {
         "latex": r"f(x_1, x_2) = (x_1 + x_2)^2",
     },
     "exp(-x1^2) + x2 * cos(x1)": {
-        "fn": lambda x1, x2: exp(-(x1 ** 2)) + x2 * cos(x1),
+        "fn": lambda x1, x2: exp(-(x1**2)) + x2 * cos(x1),
         "latex": r"f(x_1, x_2) = e^{-x_1^2} + x_2 \cdot \cos(x_1)",
     },
     "log(x1^2 + 1) - x2 * x1": {
-        "fn": lambda x1, x2: log(x1 ** 2 + 1) - x2 * x1,
+        "fn": lambda x1, x2: log(x1**2 + 1) - x2 * x1,
         "latex": r"f(x_1, x_2) = \ln(x_1^2 + 1) - x_2 \cdot x_1",
     },
 }
@@ -335,13 +340,15 @@ PRESETS = {
 # 3. Graphviz DOT rendering
 # ═══════════════════════════════════════════════════════════════
 
-def _build_dot(topo, forward_done, backward_done, active_node_id=None,
-               grad_snapshot=None):
+
+def _build_dot(
+    topo, forward_done, backward_done, active_node_id=None, grad_snapshot=None
+):
     """Build a Graphviz DOT string."""
     lines = [
         "digraph G {",
         "  rankdir=LR;",
-        f'  bgcolor="transparent";',
+        '  bgcolor="transparent";',
         f'  node [style=filled, fontcolor="{CLR_TEXT}", fontsize=12, '
         f'fontname="monospace", shape=record, penwidth=1.2];',
         f'  edge [color="{CLR_SECONDARY}", fontcolor="{CLR_SECONDARY}", '
@@ -391,6 +398,7 @@ def _build_dot(topo, forward_done, backward_done, active_node_id=None,
 # 4. Build steps for the stepper UI
 # ═══════════════════════════════════════════════════════════════
 
+
 def _build_steps(topo, root):
     """
     Return a list of step dicts:
@@ -415,16 +423,18 @@ def _build_steps(topo, root):
             desc = f"Compute **{v.name}** = {v._op}({children_str}) = {v.data:.4f}"
 
         new_fwd = forward_done | {id(v)}
-        steps.append({
-            "phase": "Forward Pass",
-            "description": desc,
-            "latex": None,
-            "numeric": None,
-            "active_id": id(v),
-            "forward_done": set(new_fwd),
-            "backward_done": set(),
-            "grad_snapshot": dict(empty_grads),
-        })
+        steps.append(
+            {
+                "phase": "Forward Pass",
+                "description": desc,
+                "latex": None,
+                "numeric": None,
+                "active_id": id(v),
+                "forward_done": set(new_fwd),
+                "backward_done": set(),
+                "grad_snapshot": dict(empty_grads),
+            }
+        )
         forward_done = new_fwd
 
     # -- Backward pass: run step-by-step, capturing grad snapshots --
@@ -439,16 +449,18 @@ def _build_steps(topo, root):
     root.grad = 1.0
     backward_done_acc = {id(root)}
     grad_snap = {id(v): v.grad for v in topo}
-    steps.append({
-        "phase": "Backward Pass",
-        "description": f"Seed output grad: **{root.name}**.grad = 1.0",
-        "latex": rf"\frac{{\partial L}}{{\partial {root.name}}} = 1",
-        "numeric": "1.0",
-        "active_id": id(root),
-        "forward_done": all_forward,
-        "backward_done": set(backward_done_acc),
-        "grad_snapshot": dict(grad_snap),
-    })
+    steps.append(
+        {
+            "phase": "Backward Pass",
+            "description": f"Seed output grad: **{root.name}**.grad = 1.0",
+            "latex": rf"\frac{{\partial L}}{{\partial {root.name}}} = 1",
+            "numeric": "1.0",
+            "active_id": id(root),
+            "forward_done": all_forward,
+            "backward_done": set(backward_done_acc),
+            "grad_snapshot": dict(grad_snap),
+        }
+    )
 
     # Process each node's backward, capturing state after each VJP
     for v in backward_order:
@@ -463,7 +475,6 @@ def _build_steps(topo, root):
 
         # Build VJP descriptions using actual grad deltas
         children = list(v._children)
-        op = v._op
 
         for child in children:
             delta = child.grad - children_before[id(child)]
@@ -481,16 +492,18 @@ def _build_steps(topo, root):
             # Build LaTeX and numeric description for this VJP
             latex, numeric = _vjp_latex(v, child, delta)
 
-            steps.append({
-                "phase": "Backward Pass",
-                "description": desc,
-                "latex": latex,
-                "numeric": numeric,
-                "active_id": id(child),
-                "forward_done": all_forward,
-                "backward_done": set(backward_done_acc),
-                "grad_snapshot": dict(grad_snap),
-            })
+            steps.append(
+                {
+                    "phase": "Backward Pass",
+                    "description": desc,
+                    "latex": latex,
+                    "numeric": numeric,
+                    "active_id": id(child),
+                    "forward_done": all_forward,
+                    "backward_done": set(backward_done_acc),
+                    "grad_snapshot": dict(grad_snap),
+                }
+            )
 
     return steps
 
@@ -567,17 +580,22 @@ def _vjp_latex(node, child, delta):
 # 5. Summary table
 # ═══════════════════════════════════════════════════════════════
 
+
 def _summary_table(topo, forward_done, backward_done, grad_snapshot):
     """Return a list of dicts for the summary table."""
     rows = []
     for v in topo:
         vid = id(v)
-        rows.append({
-            "Node": v.name,
-            "Op": v._op or "input",
-            "Value": f"{v.data:.4f}" if vid in forward_done else "\u2014",
-            "Gradient": f"{grad_snapshot[vid]:.4f}" if vid in backward_done else "\u2014",
-        })
+        rows.append(
+            {
+                "Node": v.name,
+                "Op": v._op or "input",
+                "Value": f"{v.data:.4f}" if vid in forward_done else "\u2014",
+                "Gradient": f"{grad_snapshot[vid]:.4f}"
+                if vid in backward_done
+                else "\u2014",
+            }
+        )
     return rows
 
 
@@ -603,13 +621,18 @@ x1_val = st.sidebar.slider("x1", -3.0, 3.0, 1.5, 0.1)
 x2_val = st.sidebar.slider("x2", -3.0, 3.0, 0.8, 0.1)
 
 st.sidebar.header("Display")
-show_internals = st.sidebar.checkbox("Show node internals", False,
-    help="Show _backward closure source, captured variables, and graph relationships for each node.")
+show_internals = st.sidebar.checkbox(
+    "Show node internals",
+    False,
+    help="Show _backward closure source, captured variables, and graph relationships for each node.",
+)
 
 # ── Build graph ─────────────────────────────────────────────
 x1 = Value(x1_val, name="x1")
 x2 = Value(x2_val, name="x2")
-output = preset["fn"](x1, x2)
+fn = preset["fn"]
+assert callable(fn)
+output = fn(x1, x2)
 topo = _build_topo_order(output)
 _auto_name(topo)
 output.name = "out"
@@ -632,7 +655,9 @@ with col_next:
         st.session_state["ag_step"] = min(total_steps, current + 1)
 with col_slider:
     step_idx = st.slider(
-        "Step", 0, total_steps,
+        "Step",
+        0,
+        total_steps,
         value=st.session_state.get("ag_step", 0),
         key="ag_step",
         label_visibility="collapsed",
@@ -652,11 +677,14 @@ st.markdown(
 
 # ── Graph + detail layout ──────────────────────────────────
 node_by_id = {id(v): v for v in topo}
-active = node_by_id.get(step["active_id"])
+active = node_by_id[step["active_id"]]
 
 dot = _build_dot(
-    topo, step["forward_done"], step["backward_done"],
-    step["active_id"], step["grad_snapshot"],
+    topo,
+    step["forward_done"],
+    step["backward_done"],
+    step["active_id"],
+    step["grad_snapshot"],
 )
 
 if show_internals:
@@ -709,9 +737,7 @@ if show_internals:
                 f"captured variables</div>",
                 unsafe_allow_html=True,
             )
-            cap_lines = "\n".join(
-                f"{k} = {val}" for k, val in active._captured.items()
-            )
+            cap_lines = "\n".join(f"{k} = {val}" for k, val in active._captured.items())
             st.code(cap_lines, language="python")
 
         # Graph edges
@@ -743,5 +769,7 @@ else:
 
 # ── Summary table ───────────────────────────────────────────
 st.markdown("### All Nodes")
-rows = _summary_table(topo, step["forward_done"], step["backward_done"], step["grad_snapshot"])
+rows = _summary_table(
+    topo, step["forward_done"], step["backward_done"], step["grad_snapshot"]
+)
 st.table(rows)
