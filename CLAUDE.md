@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-nnvis is a single-file Streamlit app that visualizes how feed-forward neural networks "fold" 2D space through successive layers. Inspired by [Colah's Neural Networks, Manifolds, and Topology](https://colah.github.io/posts/2014-03-NN-Manifolds-Topology/).
+nnvis is a multipage Streamlit app with interactive neural network visualizations. Inspired by [Colah's Neural Networks, Manifolds, and Topology](https://colah.github.io/posts/2014-03-NN-Manifolds-Topology/).
 
 ## Setup & Running
 
@@ -16,11 +16,19 @@ uv pip install -e .
 streamlit run app.py
 ```
 
-There are no tests or linting configured. The app is a single `app.py` file with no modules to import. Verify changes with `python -c "import ast; ast.parse(open('app.py').read())"`.
+There are no tests or linting configured. Verify changes with `python -c "import ast; ast.parse(open('file.py').read())"`.
 
 ## Architecture
 
-The entire app lives in `app.py` (~860 lines), structured as a top-to-bottom Streamlit script:
+The app uses `st.navigation` in `app.py` (thin entrypoint) to register pages from `pages/`:
+
+- **`app.py`** — entrypoint with `st.set_page_config` + `st.navigation`
+- **`pages/0_Neural_Net_Visualizer.py`** (~850 lines) — main space-folding visualizer
+- **`pages/1_Autograd_Visualizer.py`** (~570 lines) — autograd step-through visualizer
+
+### Neural Net Visualizer
+
+The page is structured as a top-to-bottom Streamlit script:
 
 1. **Sidebar controls** — all user-configurable parameters (network shape, activation, training, visualization)
 2. **Activation functions + derivatives** — pure numpy implementations with a derivatives dict for backprop
@@ -47,3 +55,13 @@ The entire app lives in `app.py` (~860 lines), structured as a top-to-bottom Str
 `render_frame(animating=False)` has two branches:
 - **`use_plotly_3d=True`** (has 3D stages, not animating): per-stage rendering via `st.columns()` mixing `_render_stage_3d()` (Plotly) and `_render_stage_2d()` (matplotlib)
 - **`use_plotly_3d=False`** (all 2D, or animating): single matplotlib figure with subplots, including `projection='3d'` subplots via `ax.remove()` + `fig.add_subplot()`
+
+### Autograd Visualizer
+
+Step-through visualization of reverse-mode autodiff on small expression graphs:
+
+1. **`Value` class** — tape-based scalar autograd with `_backward` closures for VJP rules
+2. **Preset expressions** — 4 presets (`x1*x2+sin(x1)`, `(x1+x2)^2`, etc.) as lambda + LaTeX
+3. **`_build_steps()`** — builds forward/backward step sequence with per-step grad snapshots (handles partial accumulation for shared nodes)
+4. **Graphviz rendering** — `_build_dot()` generates DOT strings with color-coded nodes (gray/blue/green)
+5. **Stepper UI** — slider + prev/next buttons, phase indicator, LaTeX VJP formulas, summary table
